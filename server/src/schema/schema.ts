@@ -1,4 +1,12 @@
-import { GraphQLObjectType, GraphQLString, GraphQLSchema, GraphQLInt, GraphQLID, GraphQLList } from 'graphql';
+import {
+    GraphQLObjectType,
+    GraphQLString,
+    GraphQLSchema,
+    GraphQLInt,
+    GraphQLID,
+    GraphQLList,
+    GraphQLNonNull
+} from 'graphql';
 import { IContext } from './context';
 import { Author, Book } from '@prisma/client';
 
@@ -8,6 +16,7 @@ const BookType: GraphQLObjectType = new GraphQLObjectType<Book, IContext>({
         id: { type: GraphQLID },
         name: { type: GraphQLString },
         genre: { type: GraphQLString },
+        authorId: { type: GraphQLID },
         author: {
             type: AuthorType,
             resolve: async (source, args, context) => {
@@ -41,27 +50,13 @@ const AuthorType: GraphQLObjectType = new GraphQLObjectType<Author, IContext>({
     })
 });
 
-const books = [
-    { name: 'Name of the Wind', genre: 'Fantasy', id: '1', authorId: '1' },
-    { name: 'The Final Empire', genre: 'Fantasy', id: '2', authorId: '2' },
-    { name: 'The Hero of Ages', genre: 'Fantasy', id: '4', authorId: '2' },
-    { name: 'The Long Earth', genre: 'Sci-Fi', id: '3', authorId: '3' },
-    { name: 'The Colour of Magic', genre: 'Fantasy', id: '5', authorId: '3' },
-    { name: 'The Light Fantastic', genre: 'Fantasy', id: '6', authorId: '3' },
-];
-
-const authors = [
-    { name: 'Patrick Rothfuss', age: 44, id: '1' },
-    { name: 'Brandon Sanderson', age: 42, id: '2' },
-    { name: 'Terry Pratchett', age: 66, id: '3' }
-];
-
 const RootQuery = new GraphQLObjectType<any, IContext>({
     name: 'RootQueryType',
-    fields: {
+    fields: { // 쿼리가 가진 필드에 대응
         book: {
-            type: BookType,
-            args: { id: { type: GraphQLID } },
+            type: BookType, // 리턴값 
+            args: { id: { type: GraphQLID } }, // 파라미터
+            // 실제 수행하는 동작
             resolve: async (source, args: { id: string }, context) => {
                 return context.prisma.book.findUnique({
                     where: {
@@ -72,9 +67,7 @@ const RootQuery = new GraphQLObjectType<any, IContext>({
         },
         author: {
             type: AuthorType,
-            args: {
-                id: { type: GraphQLID }
-            },
+            args: { id: { type: GraphQLID } },
             resolve: async (source, args: { id: string }, context) => {
                 return await context.prisma.author.findUnique({
                     where: {
@@ -99,7 +92,46 @@ const RootQuery = new GraphQLObjectType<any, IContext>({
         }
     }
 })
+const Mutation = new GraphQLObjectType<any, IContext>({
+    name: "Mutation",
+    fields: {
+        addAuthor: {
+            type: AuthorType,
+            args: {
+                name: { type: new GraphQLNonNull(GraphQLString) },
+                age: { type: new GraphQLNonNull(GraphQLInt) },
+            },
+            resolve: async (_, args: Author, context) => {
+                return await context.prisma.author.create({
+                    data: {
+                        name: args.name,
+                        age: args.age
+                    }
+                });
+            }
+        },
+        addBook: {
+            type: BookType, // 리턴 값에 대응
+            args: { // mutation 파라미터에 대응
+                name: { type: new GraphQLNonNull(GraphQLString) },
+                genre: { type: new GraphQLNonNull(GraphQLString) },
+                authorId: { type: new GraphQLNonNull(GraphQLID) }
+            },
+            // 실제 서버에서 수행하는 동작
+            resolve: async (source, args: Book, context) => {
+                return await context.prisma.book.create({
+                    data: {
+                        name: args.name,
+                        genre: args.genre,
+                        authorId: args.authorId
+                    }
+                });
+            }
+        }
+    }
+});
 
 export const gphSchema = new GraphQLSchema({
     query: RootQuery,
+    mutation: Mutation
 });
